@@ -1,0 +1,353 @@
+\include{safeRL.preambel}
+
+\begin{document}
+%globale Einstellung für Quellcodedarstellung mit listings
+\lstset{basicstyle=\scriptsize\ttfamily,language={[LaTeX]TeX}}
+
+%Seitennummerierung arabisch
+\pagenumbering{arabic}
+
+%Kopf- und Fusszeilen
+\pagestyle{scrheadings}
+\clearscrheadfoot
+
+\ihead{Safe Reinforcement Learning}
+\ohead{notes}
+\ifoot{beta version}
+\cfoot{\pagemark}
+\ofoot{2022}
+%\ofoot{\today}
+
+\input{00_title}
+
+
+% ==============================================================================
+\section{Literature Review}
+
+%------------------------------------------------------------------------------------------------------------------------------------------
+\subsection{A Comprehensive Survey on Safe Reinforcement Learning \citep{garcia_comprehensive_2015}}
+
+\subsubsection{Catigorization of Safe RL Algorithms}
+Safe RL can be defined as the process of learning policies that maximize the expectation of the return in problems in which it is important to ensure reasonable system performance and/or respect safety constraints during the learning and/or deployment processes.\\
+
+The opposite of the concept \emph{safety} is \emph{risk}, which is related to the stochasticiy of the environment.
+Under the inherent uncertainty, an optimal policy w.r.t. the long-term reward maiximization may still perform poorly in some catastrophic situations. \\
+
+Two fundamental categories of Safe RL algorithms:
+\begin{enumerate}
+\item
+	Transforming the optimization criterion to include some risk measures.\\
+	\emph{Risk-sensitive MDP} and \emph{Constrained MDP}
+\item
+	Modifying the exploration process through the incorporation of prior/external knowledge and/or the use of a risk metric, while the optimization criterion remains.
+\end{enumerate}
+
+
+\subsubsection{Optimization Criterion Considering Risk}
+
+\textbf{Risk-neutral criterion}
+\begin{align}
+\max_{\pi \in \Pi} \E_\pi\Big[\smallsum{t=0}{\infty}\gamma^t r_t\big].
+\end{align}
+\\
+\textbf{Risk-aware criterion}
+\begin{enumerate}
+\item
+	Worst-case criterion\\
+	Minimax criterion: maximize the expectation of the return w.r.t the worst outcome under a policy or w.r.t the worst case policy over all possible models.
+	\begin{itemize}
+	\item
+		Minimax criterion under inherent uncertainty of the system:
+		\begin{align}
+			\max_{\pi \in \Pi} \min_{w \in \Omega^{\pi}} \E_{\pi, w}\Big[\smallsum{t=0}{\infty}\gamma^t r_t\big],
+		\end{align}
+		where $\Omega^{\pi}$ is a set of trajectories that occurs under policy $\pi$.
+	
+		In general, the minimax criterion is too restrictive as it takes into account severe but extremely rare events which may never occur. The optimality criterion is exclusively focused on risk-avoidance or risk-averse policies.
+		
+		\emph{Example: $\beta$-pessimistic Q -- learning}, \citep{Gaskett_2003}:
+		\begin{align}
+		Q_{\beta}(s_t, a_t) = Q_{\beta}(s_t, a_t) + \alpha \big( r_{t+1} + \gamma \big( (1-\beta) \max_{a_{t+1} \in \Set{A}} Q_{\beta}(s_{t+1}, a_{t+1}) + \beta \min_{a_{t+1} \in \Set{A}} Q_{\beta}(s_{t+1}, a_{t+1}) \big) \big)
+		\end{align}
+		
+	\item
+		Minimax criterion under parameter uncertainty (transition probabilities of the MDP is not know exactly):
+		\begin{align}
+			\max_{\pi \in \Pi} \min_{p \in P} \E_{\pi, p}\Big[\smallsum{t=0}{\infty}\gamma^t r_t\big],
+		\end{align}
+		where $P$ is a set of possible transition matrices.
+	\end{itemize}
+	
+\item
+	Risk-sensitive criterion
+	\begin{itemize}
+	\item
+            	Exponential utility functions:
+            	\begin{align}
+            	\max_{\pi \in \Pi} \smallfrac{1}{\beta}\log{\E_{\pi}(e^{\beta\smallsum{t=0}{\infty}\gamma^t r_t})}, \label{eq: utility function}
+            	\end{align}
+            	where $\beta$ is the risk sensitivity parameter. Taylor expansion of  Formula \ref{eq: utility function} is:
+            	\begin{align}
+            	\max_{\pi \in \Pi} \smallfrac{1}{\beta}\log{\E_{\pi}(e^{\beta R})} = \max_{\pi \in \Pi}\E_{\pi}(R) + \smallfrac{\beta}{2}Var(R) + \mathcal{O}(\beta^2).
+            	\end{align}
+            	Risk-averse for $\beta < 0$, risk-seeking for $\beta > 0$ and risk-neutral for $\beta \rightarrow 0$
+	\item
+		Weighted sum of return and risk:
+		\begin{align}
+            	\max_{\pi \in \Pi} (\E_{\pi}(R) - \beta \omega),
+            	\end{align}
+	where $\omega$ refers to the consideration of the risk concept which can take various forms, e.g., $Var(R), TD, \rho^{\pi}(s) = \E(\smallsum{i=1}{\infty}\gamma^i \bar{r})$ in which $\bar{r} = 1$ if an error state occurs and $\bar{r} = 0$  if not.
+        \end{itemize}
+\item
+ 	Constrained criterion: constrained MDP \citep{Altman_1999}
+	\begin{align}
+            	\max_{\pi \in \Pi} \E_{\pi}(R), \mathrm{~ subject ~ to ~} c_i \in C, c_i = \{h_i \leq \alpha_i\}, \label{eq: constraints}
+         \end{align}
+         where $c_i$ represents the $i$th constraint in $C$ that the policy $\pi$ must fulfill, with $c_i = \{h_i \leq \alpha_i\}$ where $h_i$ is a function related with the return and $\alpha_i$ is the threshold restricting the values of this function. Depending on the problem, the $\leq$ in the constraints may be replaced by $\geq$. The constraints can be seen as restrictions on the space of allowable policies. Formula \ref{eq: constraints} can be transformed into:
+         \begin{align}
+            	\max_{\pi \in \Gamma} \E_{\pi}(R), 
+         \end{align}
+         where $\Gamma \subset \Pi$, each policy $\pi \in \Gamma$ satisfies the constraints $c_i \in C$. $\Gamma$ is the space of safe policies, e.g., constraints to ensure that the expectation of the return exceeds some specific minimum threshold $P (\E(R) \leq \alpha) \leq (1 - \epsilon)$, to ensure that the variance of the return does not exceed specific maximum threshold $V ar(R) \leq \alpha $, to enforce ergodicity(that is, if it can reach any state it visits from any other state it visits, so that errors are reversible, which requires the model of the MDP to be known or learned),  to ensure specific restrictions of the problem.
+         
+\item
+	Other optimization criterion: risk measures in financial engineering, e.g., value-at-risk (VaR).	
+\end{enumerate}
+
+Note that a policy with a small variance can still have a large risk, because this policy can lead the agent to error states. Therefore, the variance or the worst-outcome criterion may not be generalizable to any risky domain. 
+
+\subsubsection{Exploration Process}
+The use of random exploration would require an undesirable state to be visited before it can be labeled as undesirable. However, such visits to undesirable states may result in damage or injury to the agent, the learning system or external entities. Thus, it would be desirable to prevent the risk situations from the early steps in the learning process. The exploratory process is responsible for visits to undesirable states or risky situations but also for progressively improve the policies learned.
+ 
+Examples of other risk metric based on the level of knowledge about a state: the distance between the known and the unknown space, the difference between the highest and lowest Q-values, the number of times an agent has made a non-trivial Q-value update in a state.
+
+\begin{enumerate}
+\item
+	External knowledge.
+	\begin{enumerate}
+	\item
+		Providing initial knowledge, gathered from a teacher or previous information on the task, to bootstrap the learning algorithm. 
+		The learning algorithm is exposed to the most relevant regions of the state and action spaces from the earliest steps of the learning process, thereby eliminating the time need in random exploration for the discovery of these regions, e.g., evolutionary methods, transfer learning, initialization in RLM algorithms.
+	\item
+		Deriving a policy from a finite set of demonstrations, examples provided by the teacher, to learn a model from which to derive a policy in an off-line and, hence, safe manner, e.g., learning from demonstration \citep{Abbeel_2005}, apprenticeship learning.
+	\item
+		Providing teach advice.
+		The teacher may be a human or a simple controller, but in both cases it does not need to be an expert in the task. The teacher shares the goal of the agent and provides advice when it is necessary to avoid fatal states.
+		\begin{itemize}
+		\item
+		The learner agent asks for advice when a \emph{confidence parameter} in a state is low. e.g., the confidence parameter can also be used to detect risky situations based on the definition of fatal transitions or unknown states, safe function.
+		\item
+		The teacher provides action or information whenever the teacher feels its help is necessary, either using an interactive reward interface or sending human advice message (e.g., inductive logic programming).
+		\item
+		Interactive learning process for both the teacher and the agent.
+		\end{itemize}
+	\end{enumerate}
+\item
+	Risk-directed Exploration, while the classic optimization criterion remains. The exploration process is carried out by taking into account a defined risk metric, e.g.,\emph{controllability}:
+	\begin{align}
+	C(s_t, a_t) \leftarrow C(s_t, a_t) - \alpha' (\vert \sigma_t \vert + C(s_t, a_t)).
+	\end{align}
+	The controllability is used as an exploration bonus.\\
+	The \emph{risk-adjusted utility}: $p(1-U(s_t,a_t)) + (1-p)Q(s_,a_t), \mathrm{~where~}  \in [0,1]$.
+\end{enumerate}
+
+%------------------------------------------------------------------------------------------------------------------------------------------
+\subsection{Benchmarking Safe Exploration in Deep Reinforcement Learning \citep{Ray_2019}}
+
+\href{https://openai.com/blog/safety-gym/}{Safety Gym} \href{https://github.com/openai/safety-starter-agents}{Safety starter agent}
+
+\textbf{The safety concept}: avoiding hazards, that is, constraining the state and behavior of the system to stay away from the circumstances that lead to harm.
+
+\textbf{The safe exploration problem}: Most of the RL agents so far are typically trained in simulations, where safety concerns are minimal. However, for many problems simulators might not be available or high-enough fidelity for RL to learn behaviours  that succeed in the real word. The trial-and-error nature of RL in the real world might lead to unacceptable catastrophes.
+
+\emph{ How do we formulate safety specifications to incorporate them into RL, and how do we ensure that these specifications are robustly satisfied throughout exploration?}
+
+\begin{itemize}
+\item
+Towards standardizing safety specifications: 1) safety specifications should be separate from task performance specifications, and 2) constraints are a natural way to encode safety specifications.
+\item
+Towards measuring progress: 1) task performance of the final policy, 2) constraint satisfaction of the final policy, and 3) average regret with respect to safety costs throughout training.
+\item
+Towards providing useful baselines: 1) task objectives and safety objectives have meaningful trade-offs, and 2) performing well at the task does not automatically result in safe behavior \citep{Achiam_2017}.
+\end{itemize}
+
+%
+\subsubsection{Constrained RL}
+The general problem of training an RL agent with the intention of satisfying constraints throughout exploration in training and at test time: to formulate safety requirements as constraints, and to attain constraint-satisfying exploration.
+
+An optimal policy in constrained RL is given by:
+\begin{align}
+\pi^* = \argmax_{\pi \in \Pi_C} J_r(\pi),
+\end{align}
+where $\Pi_C$ denote a feasible set of constraint-satisfying policies and $J_r(\pi)$ is a reward-based objective function, e.g., the infinite-horizon discounted return, the finite-horizon undiscounted return, or the infinite-horizon average reward.
+
+The constrained Markov Decision Processes (CMDP) are equipped with a set of cost functions, $c_1, \cdots, c_k$, separate from the reward function. The feasible set in a CMDP is given by:
+\begin{align}
+\Pi_C = {\pi:J_{c_i}(\pi) \leq d_i, i = 1, \cdots, k},
+\end{align}
+where $J_{c_i}$ is a cost-based constraint function defined the same way as an expected return or average return metric (using $c_i$ instead of the reward $r$), and each $d_i$ is a threshold (a human-selected hyperparameter). The CMDP framework can be extended to use different kinds of cost-based constraints. The use of constraints may improve 1) the ease with which safety specifications are learned and transferred between tasks, and 2) the robustness with which agents attain those safety requirements.
+
+%
+\subsubsection{Evaluation protocol}
+\begin{itemize}
+\item
+	Optimization problem:
+	\begin{align}
+		\max_{\pi_{\theta}} \E_{\tau \sim \pi_{\theta}} \Big[ \smallsum{t=0}{T} {r_t} \big] \nonumber \\	
+		\mathrm{s.t.~} \max_{\pi_{\theta}} \E_{\tau \sim \pi_{\theta}}\Big[\smallsum{t=0}{T}{c_t}\big] \leq d,
+	\end{align}
+where $c_t$ is the aggregate indicator cost function for the environment ($c_t = 1$ for an unsafe interaction, regardless of source) and $d$ is a hyperparameter. 
+\item
+	Metrics:
+	\begin{itemize}
+	\item
+		The average episodic return, $J_r(\theta)$.
+	\item
+		The average episodic sum of costs, $J_c(\theta)$.
+	\item
+		The average cost over the entirety of training, $\rho_c$. If $T_{ep}$ is the average episode length, the condition ``the average episode during training satisfied constraints'' can be written as $\rho_c T_{ep} \leq d$.
+	\end{itemize}
+\item
+	Comparing training runs:
+	\begin{itemize}
+	\item
+		All agents that fail to satisfy constraints are strictly worse than all agents that satisfy constraints.
+	\item
+		For two constraint-satisfying agents $A_1$ and $A_2$ that have been trained for an equal number of environment interactions, $A_1$ dominates $A_2$ ($A_1 \succ A_2$) if it strictly improves on either return or cost rate and does at least as well on the other. That is,
+		\begin{align}
+			A_1 \succ A_2 ~ \mathrm{if} ~ 
+			\begin{array}{cc}
+			J_r(A_1) \geq J_r(A_2) \\ \rho_c(A_1) < \rho_c(A_2)
+			\end{array}  ~ \mathrm{or} ~ 
+			\begin{array}{cc}
+			J_r(A_1) > J_r(A_2) \\ \rho_c(A_1) \leq \rho_c(A_2)	
+			\end{array} 
+		\end{align}
+	\end{itemize}
+\item
+	Comparing Algorithms: 
+	\begin{itemize}
+	\item
+		Normalized return
+		\begin{equation}
+			\bar{J}_r(\theta) = \frac{J_r(\theta)}{J_r^{\varepsilon}},
+		\end{equation}
+	\item
+		Normalized constraint violation
+		\begin{equation}
+			\bar{M}_c(\theta) = \frac{\max(0, J_c(\theta) - d)}{\max(\epsilon, J_c^{\varepsilon} - d)}, \epsilon = 10^{-6},
+		\end{equation}
+	\item
+		Normalized cost rate
+		\begin{equation}
+			\bar{\rho}_c(\theta) = \frac{\rho_c(\theta)}{\rho_c^{\varepsilon}},
+		\end{equation}
+		where $J_r^{\varepsilon}, J_c^{\varepsilon}, \rho_c^{\varepsilon}$ are a set of characteristic metrics for each environment ${\varepsilon}$.
+	\end{itemize}
+\end{itemize}
+         
+%
+\subsubsection{Algorithms}
+\begin{itemize}
+\item
+	\textbf{Unconstrained algorithms}: TRPO\citep{Schulman_2015} and PPO\citep{Schulman_2017}.
+\item
+	\textbf{Constrained algorithms}: TRPO-Lagrangian and PPO-Lagrangian
+	\begin{equation}
+		\max_{\theta}\min_{\lambda \geq 0} \mathcal{L}(\theta, \lambda) \doteq f(\theta) - \lambda g(\theta)
+	\end{equation}
+\item
+	\textbf{Constrained policy optimization}: CPO \citep{Achiam_2017, Chow_2019}
+\end{itemize}
+
+Note that standard model-free RL approaches without replay buffers are fundamentally limited in their ability to minimize constraint regret: they must continually experience unsafe events in order to learn about them. As a result, memory-based and model-based RL approaches might be particularly interesting here.\\
+
+%
+\subsubsection{Research direction}
+\begin{itemize}
+\item
+	Safe transfer learning
+    \begin{itemize}
+    \item
+    	Whether the agent can quickly adapt to new safety requirements: An agent is initially trained in one constrained RL environment, and then transferred to another environment where the task is the same but the safety requirements are different. 
+    \item
+    	Whether the agent can remain constraint-satisfying despite the potential for catastrophic forgetting induced by the change in objective function: An agent is initially trained in one constrained RL environment, and then transferred to another environment where the safety requirements are the same but the task is different.
+    \end{itemize}
+\item
+	Combining implicitly-specified objects with constrained RL, e.g., inverse reinforcement learning, learning from human preferences, and other heuristics for extracting value-aligned objectives from human data.
+
+\end{itemize}
+
+%----------------------------------------------------------------------------------------------------------------------------------------
+\subsection{AI Safety Gridworlds \citep{leike_ai_2017}}
+\href{https://github.com/deepmind/ai-safety-gridworlds}{\emph{gridworlds}} as minimal safety checks.
+
+Gridworld setups: 
+\begin{itemize}
+\item
+    States and actions, an episodic ${MDP}< \Set S, \Set A, T, R, s_0>$: 
+    A two-dimensional grid of cells (empty, or contain a wall or other objects), similar to a chess board. The agent always occupies one cell of the grid and can only interact with objects in its cell or move to the four adjacent cells.
+\item
+    Reward function $R$:
+    The nominal reinforcement signal observed by the agent.
+\item
+    (Safety) performance function $R^*$:
+    A second reward function hidden from the agent. The agent is evaluated on $R^*$ instead of $R$.
+\item
+    Objectives:
+    \begin{itemize}
+    \item
+    	\emph{Specification problem}: $R$ and $R^*$ differ. 
+	In a specification problem the challenge is to find an (a priori) algorithmic solution for each of these additional objectives that generalizes well across many environments.
+	\begin{itemize}
+            \item
+            Safe interruptibility: The off-switch environment.
+            \item
+            Avoiding side effects: The irreversible side effects environment.
+            \item
+            Absent Supervisor: The absent supervisor environment.
+            \item
+            Reward Gaming: The boat race environment and the tomato watering environment.
+       \end{itemize}
+    \item
+        \emph{Robustness problem}: $R$ and $R^*$ are identical.
+        \begin{itemize}
+        \item
+        	Self-modification: The whisky and gold environment.
+        \item
+        	Distributional Shift: The lava world environment
+        \item
+    	Robustness to Adversaries: The friend or foe environment
+        \item
+        	Safe Exploration: The island navigation environment.
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+
+
+
+% ==============================================================================
+\section{Safe RL algorithms}
+
+% ==============================================================================
+\section{Domain Background}
+\begin{enumerate}
+	\item
+		Open AI \href{https://openai.com/blog/safety-gym/}{Safety Gym}
+	\item
+	\href{https://github.com/openai/coinrun}{CoinRun }
+	\item
+		\href{https://paperswithcode.com/task/safe-reinforcement-learning}{Safe Reinforcement Learning}
+	\item
+		\href{https://paperswithcode.com/task/safe-exploration/codeless}{Safe Exploration}
+\end{enumerate}
+	
+%\newpage
+% ==============================================================================
+%\def\FormatName#1{\IfSubStr{#1}{B\"ohmer}{\textbf{#1}}{#1}}
+\def\FormatName#1{#1}
+\bibliographystyle{highlight}
+{\footnotesize\bibliography{references}}
+
+\end{document}
+
